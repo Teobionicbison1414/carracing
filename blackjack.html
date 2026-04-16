@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Online Multiplayer Blackjack</title>
+  <style>
+    body { margin:0; background:#064420; color:#fff; font-family:sans-serif;
+           display:flex; justify-content:center; align-items:center; height:100vh; }
+    .container { width:800px; max-width:95vw; background:#0b8457; border-radius:16px;
+                 padding:20px 30px; box-shadow:0 0 30px rgba(0,0,0,0.6); }
+    h1 { text-align:center; margin-top:0; }
+    .top { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    input { padding:4px 8px; border-radius:4px; border:none; }
+    button { padding:6px 12px; border-radius:6px; border:none; cursor:pointer; font-weight:600; }
+    .cards { display:flex; gap:6px; flex-wrap:wrap; min-height:60px; }
+    .card { width:36px; height:54px; border-radius:6px; background:#fff; color:#000;
+            display:flex; align-items:center; justify-content:center; font-weight:bold;
+            box-shadow:0 0 5px rgba(0,0,0,0.5); font-size:14px; }
+    .controls { display:flex; justify-content:center; gap:10px; margin-top:10px; }
+    .status { text-align:center; margin-top:10px; font-weight:600; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Online Multiplayer Blackjack</h1>
+  <div class="top">
+    <div>
+      Room: <input id="room" placeholder="room name">
+      <button id="join">Join</button>
+      <span id="room-label"></span>
+    </div>
+    <div id="player-label"></div>
+  </div>
+
+  <h3>Dealer</h3>
+  <div id="dealer-cards" class="cards"></div>
+
+  <h3>Players</h3>
+  <div id="players"></div>
+
+  <div class="controls">
+    <button id="deal">Deal</button>
+    <button id="hit">Hit</button>
+    <button id="stand">Stand</button>
+  </div>
+
+  <div class="status" id="status"></div>
+</div>
+
+<script>
+  const ws = new WebSocket(`ws://${location.hostname}:8080`);
+  let state = null;
+  let playerIndex = null;
+
+  const dealerEl = document.getElementById('dealer-cards');
+  const playersEl = document.getElementById('players');
+  const statusEl = document.getElementById('status');
+  const roomInput = document.getElementById('room');
+  const joinBtn = document.getElementById('join');
+  const roomLabel = document.getElementById('room-label');
+  const playerLabel = document.getElementById('player-label');
+
+  const dealBtn = document.getElementById('deal');
+  const hitBtn = document.getElementById('hit');
+  const standBtn = document.getElementById('stand');
+
+  function renderCards(el, hand) {
+    el.innerHTML = '';
+    hand.forEach(c => {
+      const div = document.createElement('div');
+      div.className = 'card';
+      div.textContent = c.rank + c.suit;
+      el.appendChild(div);
+    });
+  }
+
+  function render() {
+    if (!state) return;
+    renderCards(dealerEl, state.dealer || []);
+    playersEl.innerHTML = '';
+    (state.players || []).forEach((p, i) => {
+      const div = document.createElement('div');
+      div.style.marginBottom = '6px';
+      div.textContent = `Player ${i+1} — ${p.total || 0}` +
+        (state.inRound && state.currentPlayer === i ? ' (turn)' : '');
+      const cards = document.createElement('div');
+      cards.className = 'cards';
+      renderCards(cards, p.hand || []);
+      div.appendChild(cards);
+      playersEl.appendChild(div);
+    });
+    statusEl.textContent = state.message || '';
+  }
+
+  ws.onmessage = e => {
+    const data = JSON.parse(e.data);
+    if (data.type === 'state') {
+      state = data.state;
+      render();
+    }
+  };
+
+  joinBtn.onclick = () => {
+    const room = roomInput.value.trim() || 'default';
+    ws.send(JSON.stringify({ type: 'join', room }));
+    roomLabel.textContent = `Joined: ${room}`;
+    if (playerIndex === null) {
+      playerIndex = 0; // simple: first tab assumes P1, second P2, etc.
+      playerLabel.textContent = `You are Player (approx): ${playerIndex + 1}`;
+    }
+  };
+
+  dealBtn.onclick = () => {
+    ws.send(JSON.stringify({ type: 'deal' }));
+  };
+  hitBtn.onclick = () => {
+    ws.send(JSON.stringify({ type: 'hit' }));
+  };
+  standBtn.onclick = () => {
+    ws.send(JSON.stringify({ type: 'stand' }));
+  };
+</script>
+</body>
+</html>
